@@ -17,7 +17,7 @@ license = "MIT"
 [dependencies]
 actix-files = "0.1.6"
 actix-identity = "0.1.0"
-actix-web = "1.0.8"
+actix-web = { version = "1.0.8", features = ["ssl"] }
 base64 = "0.11.0"
 blake2 = "0.8.1"
 chrono = "0.4.9"
@@ -28,6 +28,7 @@ env_logger = "0.7.1"
 futures = "0.1.29"
 lazy_static = "1.4.0"
 num_cpus = "1.10.1"
+openssl = "0.10"
 toml = "0.5.3"
 [dependencies.diesel]
 version = "1.4.3"

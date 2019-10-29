@@ -88,6 +88,12 @@ pub struct Config {
     pub files_dir: PathBuf,
     /// Maximum allowed file size
     pub max_filesize: usize,
+    /// SSL Certificate private key location
+    pub cert_privkey: String,
+    /// SSL Certificate chain location
+    pub cert_chain: String,
+    /// Use SSL or not
+    pub use_ssl: bool,
 }
 
 #[cfg(not(feature = "dev"))]
@@ -103,6 +109,9 @@ impl Default for Config {
         let pool_size = std::cmp::max(1, num_cpus::get() as u32 / 2);
         let files_dir = get_data_dir().join("files");
         let max_filesize = 10_000_000;
+        let cert_privkey = "cert.pem".to_string();
+        let cert_chain = "chain.pem".to_string();
+        let use_ssl = false;
 
         Config {
             port,
@@ -110,6 +119,9 @@ impl Default for Config {
             pool_size,
             files_dir,
             max_filesize,
+            cert_privkey,
+            cert_chain,
+            use_ssl,
         }
     }
 }
@@ -191,6 +203,9 @@ impl Config {
             }
         };
         let max_filesize = parse_env!("MAX_FILESIZE");
+        let cert_privkey = parse_env!("CERTIFICATE");
+        let cert_chain = parse_env!("CERT_CHAIN");
+        let use_ssl = parse_env!("USE_SSL");
 
         Config {
             port,
@@ -198,6 +213,9 @@ impl Config {
             pool_size,
             files_dir,
             max_filesize,
+            cert_privkey,
+            cert_chain,
+            use_ssl,
         }
     }
 }

@@ -10,6 +10,7 @@ extern crate diesel_migrations;
 
 use actix_identity::{CookieIdentityPolicy, IdentityService};
 use actix_web::{web, App, FromRequest, HttpServer};
+use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use diesel::{
     r2d2::{self, ConnectionManager},
     sqlite::SqliteConnection,
@@ -76,56 +77,80 @@ fn main() {
 
     let port = config.port;
     let max_filesize = (config.max_filesize as f64 * 1.37) as usize;
+    
+    let ssl = config.use_ssl;
+    let key = config.cert_privkey.clone();
+    let chain = config.cert_chain.clone();
 
     println!("Listening on port {}", port);
 
-    HttpServer::new(move || {
-        App::new()
-            .data(pool.clone())
-            .data(config.clone())
-            .data(password_hash.clone())
-            .wrap(IdentityService::new(
-                CookieIdentityPolicy::new(&[0; 32])
-                    .name("filite-auth-cookie")
-                    .secure(false),
-            ))
-            .wrap(setup::logger_middleware())
-            .route("/", web::get().to(routes::index))
-            .route("/logout", web::get().to(routes::logout))
-            .route("/config", web::get().to(routes::get_config))
-            .route("/f", web::get().to_async(routes::files::gets))
-            .route("/l", web::get().to_async(routes::links::gets))
-            .route("/t", web::get().to_async(routes::texts::gets))
-            .route("/f/{id}", web::get().to_async(routes::files::get))
-            .route("/l/{id}", web::get().to_async(routes::links::get))
-            .route("/t/{id}", web::get().to_async(routes::texts::get))
-            .service(
-                web::resource("/f/{id}")
-                    .data(web::Json::<routes::files::PutFile>::configure(|cfg| {
-                        cfg.limit(max_filesize)
-                    }))
-                    .route(web::put().to_async(routes::files::put))
-                    .route(web::delete().to_async(routes::files::delete)),
-            )
-            .service(
-                web::resource("/l/{id}")
-                    .route(web::put().to_async(routes::links::put))
-                    .route(web::delete().to_async(routes::links::delete)),
-            )
-            .service(
-                web::resource("/t/{id}")
-                    .route(web::put().to_async(routes::texts::put))
-                    .route(web::delete().to_async(routes::texts::delete)),
-            )
-    })
-    .bind(&format!("localhost:{}", port))
-    .unwrap_or_else(|e| {
-        eprintln!("Can't bind webserver to specified port: {}.", e);
-        process::exit(1);
-    })
-    .run()
-    .unwrap_or_else(|e| {
-        eprintln!("Can't start webserver: {}.", e);
-        process::exit(1);
-    });
+    let server = HttpServer::new(move || {
+            App::new()
+                .data(pool.clone())
+                .data(config.clone())
+                .data(password_hash.clone())
+                .wrap(IdentityService::new(
+                    CookieIdentityPolicy::new(&[0; 32])
+                        .name("filite-auth-cookie")
+                        .secure(false),
+                ))
+                .wrap(setup::logger_middleware())
+                .route("/", web::get().to(routes::index))
+                .route("/logout", web::get().to(routes::logout))
+                .route("/config", web::get().to(routes::get_config))
+                .route("/f", web::get().to_async(routes::files::gets))
+                .route("/l", web::get().to_async(routes::links::gets))
+                .route("/t", web::get().to_async(routes::texts::gets))
+                .route("/f/{id}", web::get().to_async(routes::files::get))
+                .route("/l/{id}", web::get().to_async(routes::links::get))
+                .route("/t/{id}", web::get().to_async(routes::texts::get))
+                .service(
+                    web::resource("/f/{id}")
+                        .data(web::Json::<routes::files::PutFile>::configure(|cfg| {
+                            cfg.limit(max_filesize)
+                        }))
+                        .route(web::put().to_async(routes::files::put))
+                        .route(web::delete().to_async(routes::files::delete)),
+                )
+                .service(
+                    web::resource("/l/{id}")
+                        .route(web::put().to_async(routes::links::put))
+                        .route(web::delete().to_async(routes::links::delete)),
+                )
+                .service(
+                    web::resource("/t/{id}")
+                        .route(web::put().to_async(routes::texts::put))
+                        .route(web::delete().to_async(routes::texts::delete)),
+                )
+        });
+
+    if ssl {
+
+        let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
+        builder.set_private_key_file(key, SslFiletype::PEM).unwrap();
+        builder.set_certificate_chain_file(chain).unwrap();
+
+        
+        server.bind_ssl(&format!("localhost:{}", port), builder)
+        .unwrap_or_else(|e| {
+            eprintln!("Can't bind webserver to specified port: {}.", e);
+            process::exit(1);
+        })
+        .run()
+        .unwrap_or_else(|e| {
+            eprintln!("Can't start webserver: {}.", e);
+            process::exit(1);
+        });
+    } else {
+        server.bind(&format!("localhost:{}", port))
+        .unwrap_or_else(|e| {
+            eprintln!("Can't bind webserver to specified port: {}.", e);
+            process::exit(1);
+        })
+        .run()
+        .unwrap_or_else(|e| {
+            eprintln!("Can't start webserver: {}.", e);
+            process::exit(1);
+        });
+    }
 }
